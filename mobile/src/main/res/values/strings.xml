@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Speech2Emoji</string>
+
+    <string name="button">Button</string>
+    <string name="content">empty</string>
+    <string name="speech_not_supported">"Sorry, speech input is not available on your device."</string>
+</resources>
