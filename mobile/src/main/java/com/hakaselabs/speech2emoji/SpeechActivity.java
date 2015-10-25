@@ -1,16 +1,25 @@
 package com.hakaselabs.speech2emoji;
 
-import com.hakaselabs.speech2emoji.util.SystemUiHider;
-
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Point;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.hakaselabs.speech2emoji.util.SystemUiHider;
 
 
 /**
@@ -43,20 +52,17 @@ public class SpeechActivity extends Activity {
      */
     private static final int HIDER_FLAGS = SystemUiHider.FLAG_HIDE_NAVIGATION;
 
-    //private final int SPEECH_INPUT_REQUEST = 100;
-    private String resultText;
     /**
      * The instance of the {@link SystemUiHider} for this activity.
      */
     private SystemUiHider mSystemUiHider;
-
-    /*
-    private SpeechRecognizer mSpeechRecognizer = null;
-    private Intent mRecognizerIntent;
-    private CountDownTimer mTimer;
-    private AudioManager mAudioManager;
-    */
     private Intent serviceIntent;
+    private BroadcastReceiver mLocalBroadcastReceiver;
+    private int width;
+    private int height;
+    //private VoiceService mService;
+    //private boolean mBound = false;
+    private String result;
 
     public static String TAG = SpeechActivity.class.getSimpleName();
     @Override
@@ -66,8 +72,21 @@ public class SpeechActivity extends Activity {
         setContentView(R.layout.activity_emoji);
 
         final View controlsView = findViewById(R.id.fullscreen_content_controls);
-        final View contentView = findViewById(R.id.fullscreen_content);
+        final TextView contentView = (TextView) findViewById(R.id.fullscreen_content);
+        final Button button = (Button) findViewById(R.id.button);
 
+
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        this.width = size.x;
+        this.height = size.y;
+
+        serviceIntent = new Intent(this.getApplicationContext(), VoiceService.class);
+        int fontSize = Math.min(this.width, this.height) /8;
+        int testEmoji = 0x1F680;
+        contentView.setText(new String(Character.toChars(testEmoji)));
+        contentView.setTextSize(fontSize);
         // Set up an instance of SystemUiHider to control the system UI for
         // this activity.
         mSystemUiHider = SystemUiHider.getInstance(this, contentView, HIDER_FLAGS);
@@ -114,6 +133,7 @@ public class SpeechActivity extends Activity {
         contentView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                Log.d(TAG, "onClick()");
                 if (TOGGLE_ON_CLICK) {
                     mSystemUiHider.toggle();
                 } else {
@@ -125,23 +145,25 @@ public class SpeechActivity extends Activity {
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
-        findViewById(R.id.button).setOnTouchListener(mDelayHideTouchListener);
+        button.setOnTouchListener(mDelayHideTouchListener);
 
-        /*
-        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.d(TAG, "button onClicked,");
+                Toast.makeText(SpeechActivity.this, "TEST", Toast.LENGTH_SHORT).show();
+                //startService(serviceIntent);
+            }
 
-        mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        mSpeechRecognizer.setRecognitionListener(this);
-        mRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        mRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
-                Locale.getDefault());
-        mRecognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
-                this.getPackageName());
-        mRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        mRecognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-        */
-        serviceIntent = new Intent(this, VoiceService.class);
+        });
+        mLocalBroadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                result = intent.getStringExtra(VoiceService.VOICE_MESSAGE);
+                contentView.setText(result);
+
+            }
+        };
     }
 
     @Override
@@ -157,7 +179,13 @@ public class SpeechActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
+        //bind service
+        //Intent intent = new Intent(this, VoiceService.class);
+        //bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
         Log.i(TAG, "On Start .....");
+        LocalBroadcastManager.getInstance(this).registerReceiver((mLocalBroadcastReceiver),
+                new IntentFilter(VoiceService.VOICE_MESSAGE)
+        );
         startService(serviceIntent);
     }
 
@@ -205,4 +233,36 @@ public class SpeechActivity extends Activity {
         super.onPause();
         Log.i(TAG, "onPause()");
     }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(mLocalBroadcastReceiver);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopService(serviceIntent);
+    }
+
+    /** Defines callbacks for service binding, passed to bindService()
+    private ServiceConnection mConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName className,
+                                       IBinder service) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            VoiceService.LocalBinder binder = (VoiceService.LocalBinder) service;
+            mService = binder.getService();
+            mBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName arg0) {
+            mBound = false;
+        }
+    };*/
+
+
 }
