@@ -152,6 +152,8 @@ public class SpeechActivity extends Activity {
             public void onClick(View v) {
                 Log.d(TAG, "button onClicked,");
                 Toast.makeText(SpeechActivity.this, "TEST", Toast.LENGTH_SHORT).show();
+                stopService(serviceIntent);
+                finish();
                 //startService(serviceIntent);
             }
 

@@ -39,6 +39,7 @@ public class VoiceService extends Service {
 
     static final int MSG_RECOGNIZER_START_LISTENING = 1;
     static final int MSG_RECOGNIZER_CANCEL = 2;
+    static final int MSG_RECOGNIZER_RESTART = 3;
 
     // Binder given to clients
     //private final IBinder mBinder = new LocalBinder();
@@ -93,6 +94,17 @@ public class VoiceService extends Service {
                     target.mIsListening = false;
                     Log.d(TAG, "handle message: canceled recognizer");
                     break;
+
+                case  MSG_RECOGNIZER_RESTART:
+                    Log.d(TAG, "handle message: restart recognizer");
+                    if (mIsStreamSolo) {
+                        mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, false);
+                        mIsStreamSolo = false;
+                    }
+                    target.mSpeechRecognizer.destroy();
+                    target.mIsListening = false;
+                    target.initSpeechRecognizer();
+
             }
         }
     }
@@ -109,10 +121,11 @@ public class VoiceService extends Service {
         public void onFinish() {
             Log.d(TAG, "CountDownTimer onFinish()");
             mIsCountDownOn = false;
-            Message message = Message.obtain(null, MSG_RECOGNIZER_CANCEL);
+            //Message message = Message.obtain(null, MSG_RECOGNIZER_CANCEL);
+            Message message = Message.obtain(null, MSG_RECOGNIZER_RESTART);
             try {
                 mServerMessenger.send(message);
-                Log.d(TAG, "sent message: MSG_RECOGNIZER_CANCEL");
+                Log.d(TAG, "sent message: MSG_RECOGNIZER_RESTART");
                 message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
                 mServerMessenger.send(message);
                 Log.d(TAG, "sent message: MSG_RECOGNIZER_START_LISTENING");
@@ -185,9 +198,14 @@ public class VoiceService extends Service {
                 mNoSpeechCountDown.cancel();
             }
             mIsListening = false;
-            Message message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
+            //Message message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
+            Message message = Message.obtain(null, MSG_RECOGNIZER_RESTART);
             try {
                 mServerMessenger.send(message);
+                Log.d(TAG, "sent message: MSG_RECOGNIZER_RESTART");
+                message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
+                mServerMessenger.send(message);
+                Log.d(TAG, "sent message: MSG_RECOGNIZER_START_LISTENING");
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
@@ -227,9 +245,9 @@ public class VoiceService extends Service {
                     mNoSpeechCountDown.cancel();
                 }
 
-                message = Message.obtain(null, MSG_RECOGNIZER_CANCEL);
+                message = Message.obtain(null, MSG_RECOGNIZER_RESTART);
                 mServerMessenger.send(message);
-                Log.d(TAG, "sent message: MSG_RECOGNIZER_CANCEL");
+                Log.d(TAG, "sent message: MSG_RECOGNIZER_RESTART");
                 message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
                 mServerMessenger.send(message);
                 Log.d(TAG, "sent message: MSG_RECOGNIZER_START_LISTENING");
@@ -247,11 +265,7 @@ public class VoiceService extends Service {
         }
     } //SpeechRecognitionListener
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        Log.i(TAG, "onCreate(): " + VoiceService.class.getName());
-        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+    private void initSpeechRecognizer(){
         mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
         mSpeechRecognizer.setRecognitionListener(new SpeechRecognitionListener());
         mSpeechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -259,6 +273,14 @@ public class VoiceService extends Service {
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         mSpeechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
                 this.getPackageName());
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        Log.i(TAG, "onCreate(): " + VoiceService.class.getName());
+        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        initSpeechRecognizer();
         mSpeechResultString = "hello";
         mLocalBroadcaster = LocalBroadcastManager.getInstance(this);
     }
