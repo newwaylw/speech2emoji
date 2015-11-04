@@ -3,6 +3,7 @@ package com.hakaselabs.speech2emoji;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetManager;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,7 +18,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
@@ -27,7 +28,8 @@ import java.util.ArrayList;
  */
 public class VoiceService extends Service {
     public static String TAG = VoiceService.class.getName();
-    public static final String VOICE_MESSAGE = VoiceService.class.getName();
+    public static final String VOICE_RESULT_READY = "0";
+    public static final String MODEL_READY ="1";
     protected static AudioManager mAudioManager;
     protected SpeechRecognizer mSpeechRecognizer;
     protected Intent mSpeechRecognizerIntent;
@@ -41,22 +43,9 @@ public class VoiceService extends Service {
     static final int MSG_RECOGNIZER_CANCEL = 2;
     static final int MSG_RECOGNIZER_RESTART = 3;
 
-    // Binder given to clients
-    //private final IBinder mBinder = new LocalBinder();
     private LocalBroadcastManager mLocalBroadcaster ;
-    private String mSpeechResultString ;
+    private TFIDFEmojiModel emojiModel;
 
-    /**
-     * Class used for the client Binder.  Because we know this service always
-     * runs in the same process as its clients, we don't need to deal with IPC.
-
-    public class LocalBinder extends Binder {
-        VoiceService getService() {
-            // Return this instance of LocalService so clients can call public methods
-            return VoiceService.this;
-        }
-    }
-     */
     protected static class IncomingHandler extends Handler {
         private WeakReference<VoiceService> mtarget;
 
@@ -74,7 +63,9 @@ public class VoiceService extends Service {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
                         // turn off beep sound
                         if (!mIsStreamSolo) {
-                            mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, true);
+                            //mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, true);
+                            //mAudioManager.adjustVolume(AudioManager.ADJUST_MUTE, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
+                            //mAudioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
                             mIsStreamSolo = true;
                         }
                     }
@@ -87,7 +78,10 @@ public class VoiceService extends Service {
 
                 case MSG_RECOGNIZER_CANCEL:
                     if (mIsStreamSolo) {
-                        mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, false);
+                        //mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, false);
+                        //mAudioManager.adjustVolume(AudioManager.ADJUST_MUTE, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
+                        //mAudioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
+
                         mIsStreamSolo = false;
                     }
                     target.mSpeechRecognizer.cancel();
@@ -97,10 +91,6 @@ public class VoiceService extends Service {
 
                 case  MSG_RECOGNIZER_RESTART:
                     Log.d(TAG, "handle message: restart recognizer");
-                    if (mIsStreamSolo) {
-                        mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, false);
-                        mIsStreamSolo = false;
-                    }
                     target.mSpeechRecognizer.destroy();
                     target.mIsListening = false;
                     target.initSpeechRecognizer();
@@ -235,8 +225,11 @@ public class VoiceService extends Service {
         public void onResults(Bundle results) {
             Log.d(TAG, "onResults()");
             ArrayList<String> resultList = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-            Log.d(TAG, "ASR result = " + resultList.get(0));
-            sendResult(resultList.get(0));
+
+            String [] speechWordArray = resultList.get(0).toLowerCase().split("\\s+");
+            String emoji = emojiModel.predict(speechWordArray);
+            Log.d(TAG, "ASR result = " + resultList.get(0) + "predicted emoji="+emoji);
+            sendResult(VOICE_RESULT_READY, emoji);
 
             Message message;
             try {
@@ -260,8 +253,8 @@ public class VoiceService extends Service {
 
         @Override
         public void onRmsChanged(float rmsdB) {
-            if(rmsdB>2.0)
-              Log.d(TAG, "onRmsChanged="+rmsdB);
+            //if(rmsdB>2.0)
+              //Log.d(TAG, "onRmsChanged="+rmsdB);
         }
     } //SpeechRecognitionListener
 
@@ -275,14 +268,40 @@ public class VoiceService extends Service {
                 this.getPackageName());
     }
 
+    public void startListening(){
+        try
+        {
+            Message msg = new Message();
+            msg.what = MSG_RECOGNIZER_START_LISTENING;
+            mServerMessenger.send(msg);
+
+            sendResult(MODEL_READY, null);
+        }
+        catch (RemoteException e)
+        {
+
+        }
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         Log.i(TAG, "onCreate(): " + VoiceService.class.getName());
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         initSpeechRecognizer();
-        mSpeechResultString = "hello";
         mLocalBroadcaster = LocalBroadcastManager.getInstance(this);
+        //try {
+            //Log.d("TAG", Arrays.toString(getAssets().list(".")));
+        InputStream is = getResources().openRawResource(
+                getResources().getIdentifier("raw/model",
+                        "raw", getPackageName()));
+        emojiModel = new TFIDFEmojiModel(this);
+        Log.d(TAG, "spawn async task to load model...");
+        emojiModel.execute(is);
+            //emojiModel.readModel(getAssets().open("model.gz"));
+        //}catch(IOException ioe){
+        //    ioe.printStackTrace();
+        //}
     }
 
     @Override
@@ -294,16 +313,7 @@ public class VoiceService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "onStartCommand(): " + VoiceService.class.getName());
-        try
-        {
-            Message msg = new Message();
-            msg.what = MSG_RECOGNIZER_START_LISTENING;
-            mServerMessenger.send(msg);
-        }
-        catch (RemoteException e)
-        {
-
-        }
+        //startListening();
         return  START_NOT_STICKY;
     }
 
@@ -319,10 +329,10 @@ public class VoiceService extends Service {
         }
     }
 
-    public void sendResult(String message) {
-        Intent intent = new Intent(VOICE_MESSAGE);
-        if(message != null)
-            intent.putExtra(VOICE_MESSAGE, message);
+    public void sendResult(String type, String msg) {
+        Intent intent = new Intent(type);
+        if(msg != null)
+            intent.putExtra(type, msg);
         mLocalBroadcaster.sendBroadcast(intent);
     }
 
