@@ -30,6 +30,7 @@ public class VoiceService extends Service {
     public static String TAG = VoiceService.class.getName();
     public static final String VOICE_RESULT_READY = "0";
     public static final String MODEL_READY ="1";
+    public static final String RECOGNIZER_ERROR = "2";
     protected static AudioManager mAudioManager;
     protected SpeechRecognizer mSpeechRecognizer;
     protected Intent mSpeechRecognizerIntent;
@@ -38,6 +39,7 @@ public class VoiceService extends Service {
     protected boolean mIsListening;
     protected volatile boolean mIsCountDownOn;
     private static boolean mIsStreamSolo;
+    private static int mStreamVolume = 0;
 
     static final int MSG_RECOGNIZER_START_LISTENING = 1;
     static final int MSG_RECOGNIZER_CANCEL = 2;
@@ -66,6 +68,7 @@ public class VoiceService extends Service {
                             //mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, true);
                             //mAudioManager.adjustVolume(AudioManager.ADJUST_MUTE, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
                             //mAudioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+                            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0); // setting system volume to zero, muting
                             mIsStreamSolo = true;
                         }
                     }
@@ -81,7 +84,7 @@ public class VoiceService extends Service {
                         //mAudioManager.setStreamSolo(AudioManager.STREAM_VOICE_CALL, false);
                         //mAudioManager.adjustVolume(AudioManager.ADJUST_MUTE, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE);
                         //mAudioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
-
+                        mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, mStreamVolume, 0);
                         mIsStreamSolo = false;
                     }
                     target.mSpeechRecognizer.cancel();
@@ -187,6 +190,9 @@ public class VoiceService extends Service {
                 mIsCountDownOn = false;
                 mNoSpeechCountDown.cancel();
             }
+
+            //when there is an error, also sent a message to activity
+            sendResult(RECOGNIZER_ERROR, "oov");
             mIsListening = false;
             //Message message = Message.obtain(null, MSG_RECOGNIZER_START_LISTENING);
             Message message = Message.obtain(null, MSG_RECOGNIZER_RESTART);
@@ -228,7 +234,7 @@ public class VoiceService extends Service {
 
             String [] speechWordArray = resultList.get(0).toLowerCase().split("\\s+");
             String emoji = emojiModel.predict(speechWordArray);
-            Log.d(TAG, "ASR result = " + resultList.get(0) + "predicted emoji="+emoji);
+            Log.d(TAG, "ASR result = " + resultList.get(0) + " , predicted emoji="+emoji);
             sendResult(VOICE_RESULT_READY, emoji);
 
             Message message;
@@ -288,6 +294,7 @@ public class VoiceService extends Service {
         super.onCreate();
         Log.i(TAG, "onCreate(): " + VoiceService.class.getName());
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        mStreamVolume = mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC); // getting system volume into var for later un-muting
         initSpeechRecognizer();
         mLocalBroadcaster = LocalBroadcastManager.getInstance(this);
         //try {
