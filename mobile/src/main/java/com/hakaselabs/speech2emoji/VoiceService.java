@@ -18,6 +18,8 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -297,18 +299,14 @@ public class VoiceService extends Service {
         mStreamVolume = mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC); // getting system volume into var for later un-muting
         initSpeechRecognizer();
         mLocalBroadcaster = LocalBroadcastManager.getInstance(this);
-        //try {
-            //Log.d("TAG", Arrays.toString(getAssets().list(".")));
-        InputStream is = getResources().openRawResource(
-                getResources().getIdentifier("raw/model",
-                        "raw", getPackageName()));
-        emojiModel = new TFIDFEmojiModel(this);
-        Log.d(TAG, "spawn async task to load model...");
-        emojiModel.execute(is);
-            //emojiModel.readModel(getAssets().open("model.gz"));
-        //}catch(IOException ioe){
-        //    ioe.printStackTrace();
-        //}
+        try {
+            InputStream is = getAssets().open("model.m");
+            emojiModel = new TFIDFEmojiModel(this);
+            Log.d(TAG, "spawn async task to load model...");
+            emojiModel.execute(is);
+        }catch(IOException ioe){
+            ioe.printStackTrace();
+        }
     }
 
     @Override
