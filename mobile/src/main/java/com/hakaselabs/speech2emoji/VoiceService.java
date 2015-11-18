@@ -109,7 +109,7 @@ public class VoiceService extends Service {
 
         @Override
         public void onTick(long millisUntilFinished) {
-            Log.d(TAG, "onTick(), time up in "+millisUntilFinished+ "ms");
+            //Log.d(TAG, "onTick(), time up in "+millisUntilFinished+ "ms");
         }
 
         @Override

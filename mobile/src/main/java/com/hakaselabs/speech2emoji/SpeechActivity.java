@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Point;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -15,14 +17,13 @@ import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Window;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.hakaselabs.speech2emoji.util.SystemUiHider;
 
-import java.io.InputStream;
 import java.util.Arrays;
 
 
@@ -61,12 +62,11 @@ public class SpeechActivity extends Activity {
      */
     private SystemUiHider mSystemUiHider;
     private Intent serviceIntent;
-    private Intent savedServiceIntent;
     private BroadcastReceiver mLocalBroadcastReceiver;
     private int width;
     private int height;
     private String result;
-
+    private TextView emojiTextView;
     public static String TAG = SpeechActivity.class.getSimpleName();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,9 +76,8 @@ public class SpeechActivity extends Activity {
         setContentView(R.layout.activity_emoji);
 
         final View controlsView = findViewById(R.id.fullscreen_content_controls);
-        final TextView contentView = (TextView) findViewById(R.id.fullscreen_content);
+        emojiTextView = (TextView) findViewById(R.id.emoji_textview);
         final Button button = (Button) findViewById(R.id.button);
-
 
         Display display = getWindowManager().getDefaultDisplay();
         Point size = new Point();
@@ -88,13 +87,12 @@ public class SpeechActivity extends Activity {
 
         serviceIntent = new Intent(this.getApplicationContext(), VoiceService.class);
 
-        int testEmoji = 0x1F680;
-        contentView.setText("Summoning emoji lord...");
-        contentView.setTextSize(12);
+        emojiTextView.setText("Summoning emoji lord...");
+        emojiTextView.setTextSize(18);
         //requestWindowFeature(Window.FEATURE_NO_TITLE);
         // Set up an instance of SystemUiHider to control the system UI for
         // this activity.
-        mSystemUiHider = SystemUiHider.getInstance(this, contentView, HIDER_FLAGS);
+        mSystemUiHider = SystemUiHider.getInstance(this, emojiTextView, HIDER_FLAGS);
         mSystemUiHider.setup();
         mSystemUiHider
                 .setOnVisibilityChangeListener(new SystemUiHider.OnVisibilityChangeListener() {
@@ -135,7 +133,7 @@ public class SpeechActivity extends Activity {
                 });
 
         // Set up the user interaction to manually show or hide the system UI.
-        contentView.setOnClickListener(new View.OnClickListener() {
+        emojiTextView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Log.d(TAG, "onClick()");
@@ -167,22 +165,16 @@ public class SpeechActivity extends Activity {
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
                 if (action == VoiceService.MODEL_READY){
-                    contentView.setText("Speak now");
+                    emojiTextView.setText("Speak now");
                 }else if (action == VoiceService.VOICE_RESULT_READY) {
                     result = intent.getStringExtra(VoiceService.VOICE_RESULT_READY);
                     int fontSize = Math.min(width, height) /10;
-                    contentView.setTextSize(fontSize);
-                    contentView.setText(result);
+                    emojiTextView.setTextSize(fontSize);
+                    emojiTextView.setText(result);
                 }
 
             }
         };
-
-        try {
-            Log.i(TAG, "Assets files:" + Arrays.toString(getAssets().list(".")));
-            //InputStream is = getResources().openRawResource(R.raw.model);
-            //is.
-        }catch(Exception e){e.printStackTrace();}
     }
 
     @Override
@@ -199,11 +191,16 @@ public class SpeechActivity extends Activity {
     protected void onStart() {
         super.onStart();
         Log.i(TAG, "On Start .....");
-        IntentFilter filter = new IntentFilter(VoiceService.VOICE_RESULT_READY);
-        filter.addAction(VoiceService.MODEL_READY);
-        LocalBroadcastManager.getInstance(this).registerReceiver((mLocalBroadcastReceiver),
-                filter);
-        startService(serviceIntent);
+        if (this.hasInternetConnection()) {
+
+            IntentFilter filter = new IntentFilter(VoiceService.VOICE_RESULT_READY);
+            filter.addAction(VoiceService.MODEL_READY);
+            LocalBroadcastManager.getInstance(this).registerReceiver((mLocalBroadcastReceiver),
+                    filter);
+            startService(serviceIntent);
+        }else{
+            this.redirectToSettings();
+        }
     }
 
     /**
@@ -242,7 +239,6 @@ public class SpeechActivity extends Activity {
     public void onResume() {
         super.onResume();
         Log.i(TAG, "onResume()");
-        //speech.startListening(recognizerIntent);
     }
 
     @Override
@@ -268,4 +264,30 @@ public class SpeechActivity extends Activity {
         stopService(serviceIntent);
     }
 
+    private boolean hasInternetConnection() {
+        //check if device has internet access
+        ConnectivityManager cm =
+                (ConnectivityManager)this.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        return  activeNetwork != null &&
+                activeNetwork.isConnectedOrConnecting();
+    }
+
+    private void redirectToSettings(){
+        this.emojiTextView.setText("\u26A0\n Network unavailable, have you enabled network access?");
+        LinearLayout layout = (LinearLayout) findViewById(R.id.main_listview);
+        Button gotoSettingButton = new Button(this);
+        gotoSettingButton.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        gotoSettingButton.setText("Go to settings");
+        layout.addView(gotoSettingButton);
+
+        gotoSettingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.d(TAG, "goto setting button clicked.");
+                startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));
+            }
+        });
+    }
 }
