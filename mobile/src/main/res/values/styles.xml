@@ -1,9 +1,16 @@
 <resources>
 
     <!-- Base application theme. -->
+    <!--
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowTitleSize">0dp</item>
+    </style>
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowActionBar">true</item>
+        <item name="android:homeAsUpIndicator">@drawable/ic_drawer</item>
     </style>
 
     <style name="FullscreenTheme" parent="android:Theme.NoTitleBar">
@@ -26,5 +33,6 @@
 
     <!-- Backward-compatible version of ?android:attr/buttonBarButtonStyle -->
     <style name="ButtonBarButton" />
+
 
 </resources>

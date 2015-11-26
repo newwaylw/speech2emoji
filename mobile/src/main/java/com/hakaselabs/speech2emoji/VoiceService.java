@@ -3,7 +3,6 @@ package com.hakaselabs.speech2emoji;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.AssetManager;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Locale;
 
 
 /**
@@ -33,6 +33,7 @@ public class VoiceService extends Service {
     public static final String VOICE_RESULT_READY = "0";
     public static final String MODEL_READY ="1";
     public static final String RECOGNIZER_ERROR = "2";
+    public static final int ASR_TIMER = 9000;
     protected static AudioManager mAudioManager;
     protected SpeechRecognizer mSpeechRecognizer;
     protected Intent mSpeechRecognizerIntent;
@@ -49,6 +50,7 @@ public class VoiceService extends Service {
 
     private LocalBroadcastManager mLocalBroadcaster ;
     private TFIDFEmojiModel emojiModel;
+    private String lang = Locale.getDefault().toString();
 
     protected static class IncomingHandler extends Handler {
         private WeakReference<VoiceService> mtarget;
@@ -105,7 +107,7 @@ public class VoiceService extends Service {
     }
 
     // Count down timer for Jelly Bean work around
-    protected CountDownTimer mNoSpeechCountDown = new CountDownTimer(5000, 1000) {
+    protected CountDownTimer mNoSpeechCountDown = new CountDownTimer(ASR_TIMER, 1000) {
 
         @Override
         public void onTick(long millisUntilFinished) {
@@ -236,7 +238,7 @@ public class VoiceService extends Service {
 
             String [] speechWordArray = resultList.get(0).toLowerCase().split("\\s+");
             String emoji = emojiModel.predict(speechWordArray);
-            Log.d(TAG, "ASR result = " + resultList.get(0) + " , predicted emoji="+emoji);
+            Log.d(TAG, "ASR result = " + resultList.get(0) + " , predicted emoji="+toUnicodeString(emoji));
             sendResult(VOICE_RESULT_READY, emoji);
 
             Message message;
@@ -274,6 +276,9 @@ public class VoiceService extends Service {
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         mSpeechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
                 this.getPackageName());
+        mSpeechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, this.lang);
+        Log.d(TAG, "ASR Language=" + lang);
+
     }
 
     public void startListening(){
@@ -319,6 +324,7 @@ public class VoiceService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "onStartCommand(): " + VoiceService.class.getName());
         //startListening();
+        setLanguage(intent.getStringExtra("LANG"));
         return  START_NOT_STICKY;
     }
 
@@ -339,6 +345,36 @@ public class VoiceService extends Service {
         if(msg != null)
             intent.putExtra(type, msg);
         mLocalBroadcaster.sendBroadcast(intent);
+    }
+
+    public void setLanguage(String languageCode){
+        this.lang = languageCode;
+    }
+
+    public String getLanguage(){
+        return this.lang;
+    }
+
+    private String toUnicodeString(String str) {
+
+        StringBuilder retStr = new StringBuilder();
+        for(int i=0; i<str.length(); i++) {
+            int cp = Character.codePointAt(str, i);
+            int charCount = Character.charCount(cp);
+            if (charCount > 1) {
+                i += charCount - 1; // 2.
+                if (i >= str.length()) {
+                    throw new IllegalArgumentException("truncated unexpectedly");
+                }
+            }
+
+            if (cp < 128) {
+                retStr.appendCodePoint(cp);
+            } else {
+                retStr.append(String.format("\\u%x", cp));
+            }
+        }
+        return retStr.toString();
     }
 
 }

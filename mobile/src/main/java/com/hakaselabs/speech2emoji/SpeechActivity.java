@@ -1,30 +1,32 @@
 package com.hakaselabs.speech2emoji;
 
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.graphics.Point;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
+import android.provider.Settings;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v4.content.LocalBroadcastManager;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Display;
-import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import android.support.v7.app.ActionBarActivity;
 import com.hakaselabs.speech2emoji.util.SystemUiHider;
-
-import java.util.Arrays;
+import java.util.Locale;
 
 
 /**
@@ -33,7 +35,7 @@ import java.util.Arrays;
  *
  * @see SystemUiHider
  */
-public class SpeechActivity extends Activity {
+public class SpeechActivity extends AppCompatActivity {
     /**
      * Whether or not the system UI should be auto-hidden after
      * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
@@ -60,24 +62,96 @@ public class SpeechActivity extends Activity {
     /**
      * The instance of the {@link SystemUiHider} for this activity.
      */
-    private SystemUiHider mSystemUiHider;
+//    private SystemUiHider mSystemUiHider;
     private Intent serviceIntent;
     private BroadcastReceiver mLocalBroadcastReceiver;
     private int width;
     private int height;
     private String result;
     private TextView emojiTextView;
+    private View controlsView;
+    private DrawerLayout drawerLayout;
+    private ActionBarDrawerToggle mDrawerToggle;
+    private Button gotoSettingButton;
+    private RadioButton languageCNButton;
+    private RadioButton languageENButton;
+    private int drawableRes=0;
+    private Locale selectedLocale = Locale.getDefault();
+
     public static String TAG = SpeechActivity.class.getSimpleName();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.d(TAG, "onCreate()");
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.main_layout);
+        drawerLayout = (DrawerLayout)findViewById(R.id.drawerLayout);
 
-        setContentView(R.layout.activity_emoji);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        //getSupportActionBar().setHomeButtonEnabled(true);
 
-        final View controlsView = findViewById(R.id.fullscreen_content_controls);
+        mDrawerToggle = new ActionBarDrawerToggle(this, drawerLayout,
+                        R.string.drawer_open, R.string.drawer_close) {
+            /** Called when a drawer has settled in a completely closed state. */
+            public void onDrawerClosed(View view) {
+                super.onDrawerClosed(view);
+                //getActionBar().setTitle("setting?");
+                invalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
+            }
+
+            /** Called when a drawer has settled in a completely open state. */
+            public void onDrawerOpened(View drawerView) {
+                super.onDrawerOpened(drawerView);
+                //getActionBar().setTitle("setting2?");
+                invalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
+            }
+        };
+        this.languageCNButton = (RadioButton)findViewById(R.id.button_language_cn);
+        this.languageENButton = (RadioButton)findViewById(R.id.button_language_en);
+        RadioGroup rGroup = (RadioGroup)findViewById(R.id.radio_group);
+
+
+
+        if(Locale.US.equals(Locale.getDefault())) {
+            drawableRes = R.drawable.us;
+            this.languageENButton.setChecked(true);
+        }else if(Locale.UK.equals(Locale.getDefault())) {
+            drawableRes = R.drawable.gb;
+            this.languageENButton.setChecked(true);
+        }else if (Locale.CHINA.equals(Locale.getDefault())) {
+            this.languageCNButton.setChecked(true);
+
+        }
+
+        this.languageCNButton.setText(Locale.CHINA.getDisplayLanguage(Locale.CHINA));
+        this.languageCNButton.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.cn, 0);
+
+        this.languageENButton.setText(Locale.getDefault().getDisplayLanguage());
+        this.languageENButton.setCompoundDrawablesWithIntrinsicBounds(0, 0, drawableRes, 0);
+
+        rGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener()
+        {
+            public void onCheckedChanged(RadioGroup rGroup, int checkedId)
+            {
+                //rGroup.getCheckedRadioButtonId();
+                switch(checkedId){
+                    case R.id.button_language_cn: selectedLocale = Locale.CHINA;break;
+                    case R.id.button_language_en:
+                        selectedLocale = (drawableRes == R.drawable.gb) ?  Locale.UK : Locale.US;
+                        break;
+                }
+                //restart service?
+                stopService(serviceIntent);
+                serviceIntent.putExtra("LANG", selectedLocale.getLanguage());
+                startService(serviceIntent);
+            }
+        });
+
+        // Set the drawer toggle as the DrawerListener
+        drawerLayout.setDrawerListener(mDrawerToggle);
+
+        //controlsView = findViewById(R.id.fullscreen_content_controls);
         emojiTextView = (TextView) findViewById(R.id.emoji_textview);
-        final Button button = (Button) findViewById(R.id.button);
+        final Button exitButton = (Button) findViewById(R.id.exit_button);
 
         Display display = getWindowManager().getDefaultDisplay();
         Point size = new Point();
@@ -92,6 +166,7 @@ public class SpeechActivity extends Activity {
         //requestWindowFeature(Window.FEATURE_NO_TITLE);
         // Set up an instance of SystemUiHider to control the system UI for
         // this activity.
+        /*
         mSystemUiHider = SystemUiHider.getInstance(this, emojiTextView, HIDER_FLAGS);
         mSystemUiHider.setup();
         mSystemUiHider
@@ -131,12 +206,13 @@ public class SpeechActivity extends Activity {
                         }
                     }
                 });
-
+        */
         // Set up the user interaction to manually show or hide the system UI.
+        /*
         emojiTextView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(TAG, "onClick()");
+                Log.d(TAG, "onClick(), view="+view);
                 if (TOGGLE_ON_CLICK) {
                     mSystemUiHider.toggle();
                 } else {
@@ -144,16 +220,17 @@ public class SpeechActivity extends Activity {
                 }
             }
         });
-
+        */
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
-        button.setOnTouchListener(mDelayHideTouchListener);
 
-        button.setOnClickListener(new View.OnClickListener() {
+        //exitButton.setOnTouchListener(mDelayHideTouchListener);
+
+        exitButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.d(TAG, "button onClicked,");
+                Log.d(TAG, "exit button onClicked,");
                 Toast.makeText(SpeechActivity.this, "exit", Toast.LENGTH_SHORT).show();
                 stopService(serviceIntent);
                 finish();
@@ -184,7 +261,7 @@ public class SpeechActivity extends Activity {
         // Trigger the initial hide() shortly after the activity has been
         // created, to briefly hint to the user that UI controls
         // are available.
-        delayedHide(100);
+        //delayedHide(100);
     }
 
     @Override
@@ -197,10 +274,17 @@ public class SpeechActivity extends Activity {
             filter.addAction(VoiceService.MODEL_READY);
             LocalBroadcastManager.getInstance(this).registerReceiver((mLocalBroadcastReceiver),
                     filter);
+            serviceIntent.putExtra("LANG", this.selectedLocale.getLanguage());
             startService(serviceIntent);
         }else{
             this.redirectToSettings();
         }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        //this.systemLocale = newConfig.locale;
     }
 
     /**
@@ -208,6 +292,7 @@ public class SpeechActivity extends Activity {
      * system UI. This is to prevent the jarring behavior of controls going away
      * while interacting with activity UI.
      */
+    /*
     View.OnTouchListener mDelayHideTouchListener = new View.OnTouchListener() {
         @Override
         public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -225,11 +310,11 @@ public class SpeechActivity extends Activity {
             mSystemUiHider.hide();
         }
     };
-
+    */
     /**
      * Schedules a call to hide() in [delay] milliseconds, canceling any
      * previously scheduled calls.
-     */
+
     private void delayedHide(int delayMillis) {
         mHideHandler.removeCallbacks(mHideRunnable);
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
@@ -263,7 +348,7 @@ public class SpeechActivity extends Activity {
         super.onDestroy();
         stopService(serviceIntent);
     }
-
+    */
     private boolean hasInternetConnection() {
         //check if device has internet access
         ConnectivityManager cm =
@@ -276,17 +361,21 @@ public class SpeechActivity extends Activity {
     private void redirectToSettings(){
         this.emojiTextView.setText("\u26A0\n Network unavailable, have you enabled network access?");
         LinearLayout layout = (LinearLayout) findViewById(R.id.main_listview);
-        Button gotoSettingButton = new Button(this);
+        if(gotoSettingButton != null){
+            layout.removeView(gotoSettingButton);
+        }else {
+            gotoSettingButton = new Button(this);
+        }
+
         gotoSettingButton.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         gotoSettingButton.setText("Go to settings");
         layout.addView(gotoSettingButton);
-
         gotoSettingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Log.d(TAG, "goto setting button clicked.");
-                startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));
+                startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)); //ACTION_WIRELESS_SETTINGS
             }
         });
     }

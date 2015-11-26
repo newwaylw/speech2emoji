@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Speech2Emoji</string>
+
+    <string name="exitButton">退出</string>
+    <string name="gotoButton">去设置一下网络</string>
+    <string name="content"></string>
+    <string name="speech_not_supported">"不好意思，您的设备不支持语音输入(╯°Д°)╯︵ ┻━┻"</string>
+</resources>

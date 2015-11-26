@@ -5,4 +5,6 @@
     <string name="gotoButton">Go to Settings</string>
     <string name="content"></string>
     <string name="speech_not_supported">"Sorry, speech input is not available on your device."</string>
+    <string name="drawer_open">drawer open</string>
+    <string name="drawer_close">drawer close</string>
 </resources>
